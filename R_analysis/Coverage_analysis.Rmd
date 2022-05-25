@@ -1,0 +1,196 @@
+---
+title: "TK_19"
+output: html_notebook
+author: Hernan Lorenzi
+---
+
+
+```{r load libraries}
+
+
+library(dplyr)
+library("GenVisR")
+library("BSgenome")
+library(ggplot2)
+library(cowplot)
+library(ggpubr)
+```
+
+
+```{r load data}
+cov.even <- load(file = "on_beads1.RData")
+cov.uneven <- load(file = "PiwiIP1.RData")
+
+# Total number of reads per sample for normalization
+cov.even.read_counts <- 17998425
+cov.uneven.read_counts <- 30138739
+```
+
+```{r}
+on_beads1.cov <- coverage(on_beads1)
+my_cov.df <- as.data.frame(
+                            cbind(
+                              coord = on_beads1.cov$chrX@lengths, 
+                              coverage = on_beads1.cov$chrX@values/(cov.even.read_counts/2e7),
+                              sample = rep("on_beads1", length(on_beads1.cov$chrX@values) )
+                              )
+                           )
+# adjust chromosome coords
+for (i in 2:length(my_cov.df$coord)){
+  my_cov.df$coord[i] <- as.numeric(my_cov.df$coord[i-1]) + as.numeric(my_cov.df$coord[i])
+}
+
+PiwiIP1.cov <- coverage(PiwiIP1)
+my_cov.piwi.df <- as.data.frame(cbind(
+                            coord = PiwiIP1.cov$chrX@lengths, 
+                            coverage = PiwiIP1.cov$chrX@values/(cov.uneven.read_counts/2e7),
+                            sample = rep("PiwiIP1", length(PiwiIP1.cov$chrX@values))
+                              )
+                            )
+
+# adjust chromosome coords
+for (i in 2:length(my_cov.piwi.df$coord)){
+  my_cov.piwi.df$coord[i] <- as.numeric(my_cov.piwi.df$coord[i-1]) + as.numeric(my_cov.piwi.df$coord[i])
+}
+
+
+
+coord_all.df <- as.data.frame(rbind(my_cov.piwi.df, my_cov.df))
+coord_all.df$sample <- as.factor(coord_all.df$sample)
+coord_all.df$coord <- as.numeric(coord_all.df$coord)
+coord_all.df$coverage <- as.numeric(coord_all.df$coverage)
+
+p <- ggplot(data = coord_all.df, aes(x = coord, y = coverage, col = sample)) + geom_line() + xlim(21633500, 21641000) + theme_minimal() 
+
+dir.create("Plots", showWarnings = FALSE)
+ggsave2(filename = "coverage.pdf", plot = p, path = "Plots/", width = 11, height = 8)
+
+on_beads1.cv <- 100 * sd(as.numeric(my_cov.df$coverage))/mean(as.numeric(my_cov.df$coverage))
+piwi.cv <- 100 * sd(as.numeric(my_cov.piwi.df$coverage))/mean(as.numeric(my_cov.piwi.df$coverage))
+
+print(paste("Piwi-CV = ", piwi.cv, "\n on_beads1-CV =", on_beads1.cv))
+
+violine.p <- ggviolin(data = coord_all.df, x = "sample", y = "coverage")
+ggsave2(filename = "dispersion_violinplot.pdf", plot = violine.p, path = "Plots/", width = 8, height = 8)
+
+p
+violine.p
+```
+# This is another chunk
+iwfiwufiwhiwv fowi jwojfwe
+```{r}
+my_window <- 100
+my.cv <- vector()
+my.start <- vector()
+my.end <- vector()
+
+i <- 1
+while (i  < (length(my_cov.df$coord)-my_window)){
+  my.df <- my_cov.df[i:(i+my_window),]
+  my.cv <- c(my.cv, 100 * sd(as.numeric(my.df$coverage))/mean(as.numeric(my.df$coverage)))
+  my.start <- c(my.start, my.df$coord[1])
+  my.end <- c(my.end, my.df$coord[my_window])
+  print(paste(my.df$coord[1],my.df$coord[my_window],my.cv))
+  i <- (i + my_window)
+}
+
+on_beads1.cv.df <- as.data.frame(cbind(start = my.start, end = my.end, cv = my.cv))
+on_beads1.cv.df$sample <- "on_beads1"
+
+my.cv <- vector()
+my.start <- vector()
+my.end <- vector()
+
+i <- 1
+while (i  < (length(my_cov.piwi.df$coord)-my_window)){
+  my.df <- my_cov.piwi.df[i:(i+my_window),]
+  my.cv <- c(my.cv, 100 * sd(as.numeric(my.df$coverage))/mean(as.numeric(my.df$coverage)))
+  my.start <- c(my.start, my.df$coord[1])
+  my.end <- c(my.end, my.df$coord[my_window])
+  print(paste(my.df$coord[1],my.df$coord[my_window],my.cv))
+  i <- (i + my_window)
+}
+
+piwi.cv.df <- as.data.frame(cbind(start = my.start, end = my.end, cv = my.cv))
+piwi.cv.df$sample <- "piwi"
+
+coord_all.cv.df <- as.data.frame(rbind(piwi.cv.df,on_beads1.cv.df))
+coord_all.cv.df$cv <-as.numeric(coord_all.cv.df$cv)
+
+violine.cv.p <- ggviolin(data = coord_all.cv.df, x = "sample", y = "cv")
+violine.cv.p
+ggsave2(filename = "cv_violinplot.pdf", plot = violine.cv.p, path = "Plots/", width = 8, height = 8)
+
+boxplot.cv.p <- ggboxplot(data = coord_all.cv.df, x = "sample", y = "cv", add = c("jitter"))
+boxplot.cv.p
+ggsave2(filename = "cv_boxplot.pdf", plot = boxplot.cv.p, path = "Plots/", width = 8, height = 8)
+
+```
+
+
+```{r test dataset}
+test.df <- my_cov.df
+test.df$sample <- "test"
+read_len <- 22
+spike = 1
+noise = 10
+test.df$coord <- as.numeric(test.df$coord) 
+test.df$sample <- "test"
+# Simulate probability of coverage per base 
+r <- rnorm(length(my_cov.df$coverage), mean = 100, sd = noise)
+r <- abs(r)/max(r)
+test.df$coverage <- as.vector(rmultinom(n = 1, size = 30000, prob = r^spike)) # making distributions mor e extreme
+head(test.df)
+
+p <- ggplot(data = test.df, aes(x = coord, y = coverage, col = sample)) + geom_line() + xlim(21633500, 21641000) + theme_minimal() 
+
+p
+
+test.df$reads <- 0
+for (i in 1:(dim(test.df)[1]-read_len)){
+  coord_start = i
+  coord_end = i + read_len
+  for (j in coord_start:coord_end){
+    test.df$reads[j] = test.df$reads[j] + (1 * test.df$coverage[i])
+  }
+}
+head(test.df, n=100)
+
+# Calculate CV
+test.cv <- 100 * sd(as.numeric(test.df$reads))/mean(as.numeric(test.df$reads))
+print(test.cv)
+
+# Plot coverage
+test.p <- ggplot(data = test.df, aes(x = coord, y = reads, colour = sample)) + geom_line() + xlim(21633500, 21641000) + theme_minimal() + labs(title = paste("spike = ", spike, "noise = ", noise, "CV = ", round(test.cv, digits = 2))) + ylim(0,300)
+test.p
+ggsave2(filename = paste0("dispersion_test_s",spike,"_n",noise,".pdf"), plot = test.p, path = "Plots/", width = 8, height = 8)
+
+# CV / 100 bp
+my_window <- 100
+my.cv <- vector()
+my.start <- vector()
+my.end <- vector()
+
+i <- 1
+while (i  < (length(test.df$coord)-my_window)){
+  my.df <- test.df[i:(i+my_window),]
+  my.cv <- c(my.cv, 100 * sd(as.numeric(my.df$reads))/mean(as.numeric(my.df$reads)))
+  my.start <- c(my.start, my.df$coord[1])
+  my.end <- c(my.end, my.df$coord[my_window])
+  #print(paste(my.df$coord[1],my.df$coord[my_window],my.cv))
+  i <- (i + my_window)
+}
+
+test.cv.df <- as.data.frame(cbind(start = my.start, end = my.end, cv = my.cv))
+test.cv.df$sample <- "test"
+my_median = round(median(test.cv.df$cv), digits = 2)
+my_mean = round(mean(test.cv.df$cv), digits = 2)
+my_sd = round(sd(test.cv.df$cv), digits = 2)
+
+boxplot.test.cv.p <- ggboxplot(data = test.cv.df, x = "sample", y = "cv", add = c("jitter")) + labs(title = paste("Spike = ",spike,"Noise =",noise,"Median =", my_median,"Mean =", my_mean, "SD =", my_sd))
+
+boxplot.test.cv.p
+
+ggsave2(filename = paste0("test_cv_boxplot_s",spike,"_n",noise,".pdf"), plot = boxplot.test.cv.p, path = "Plots/", width = 8, height = 8)
+```
+
